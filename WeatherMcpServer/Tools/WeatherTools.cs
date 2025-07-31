@@ -1,26 +1,30 @@
-using System.ComponentModel;
 using ModelContextProtocol.Server;
+using WeatherMcpServer.AI;
+using WeatherMcpServer.Application;
 
 namespace WeatherMcpServer.Tools;
 
 public class WeatherTools
 {
-    [McpServerTool]
-    [Description("Describes random weather in the provided city.")]
-    public string GetCityWeather(
-        [Description("Name of the city to return weather for")] string city)
+    private readonly ITelemetryService _telemetryService;
+    private readonly IAiSummaryService _summaryService;
+
+    public WeatherTools(ITelemetryService telemetryService, IAiSummaryService summaryService)
     {
-        // Read the environment variable during tool execution.
-        // Alternatively, this could be read during startup and passed via IOptions dependency injection
-        var weather = Environment.GetEnvironmentVariable("WEATHER_CHOICES");
-        if (string.IsNullOrWhiteSpace(weather))
-        {
-            weather = "balmy,rainy,stormy";
-        }
+        _telemetryService = telemetryService;
+        _summaryService = summaryService;
+    }
 
-        var weatherChoices = weather.Split(",");
-        var selectedWeatherIndex =  Random.Shared.Next(0, weatherChoices.Length);
+    [McpServerTool]
 
-        return $"The weather in {city} is {weatherChoices[selectedWeatherIndex]}.";
+    public async Task<string> GetSummary(string stationId)
+    {
+        var telemetry = _telemetryService.GetByStationId(stationId).ToList();
+        if (!telemetry.Any())
+            return "No telemetry data found.";
+
+        var summary = await _summaryService.GenerateSummaryAsync(stationId, telemetry, "Claude", CancellationToken.None);
+        return summary;
     }
 }
+
